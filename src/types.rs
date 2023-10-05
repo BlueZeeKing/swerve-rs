@@ -31,6 +31,17 @@ impl Vector {
     pub fn scale(self, scalar: f32) -> Self {
         Self(self.0 * scalar, self.1 * scalar)
     }
+
+    // multiply the vector by the matrix:
+    //
+    // cos theta, -sin theta
+    // sin theta, cos theta
+    pub fn field_relative(self, orientation: f32) -> Self {
+        let (x, y) = Vector::from(self).into();
+        let (sin, cos) = (-1.0 * orientation).sin_cos();
+
+        (x * cos - y * sin, x * sin - y * cos).into()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -88,17 +99,6 @@ impl SwerveState {
                 drive: -1.0 * self.drive,
             }
         }
-    }
-
-    // multiply the vector by the matrix:
-    //
-    // cos theta, -sin theta
-    // sin theta, cos theta
-    pub fn field_relative(self, orientation: f32) -> SwerveState {
-        let (x, y) = Vector::from(self).into();
-        let (sin, cos) = (-1.0 * orientation).sin_cos();
-
-        Vector::from((x * cos - y * sin, x * sin - y * cos)).into()
     }
 }
 

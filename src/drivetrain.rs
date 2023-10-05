@@ -15,8 +15,8 @@ impl Drivetrain {
     fn set_input_raw(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
         for (module, position) in self.modules.iter_mut().zip(self.positions) {
             module.set_target(
-                SwerveState::from(drive + position.rotate_90().scale(turn_rate))
-                    .field_relative(self.gyro.get_yaw()),
+                (drive.field_relative(self.gyro.get_yaw()) + position.rotate_90().scale(turn_rate))
+                    .into(),
             )?;
         }
 
