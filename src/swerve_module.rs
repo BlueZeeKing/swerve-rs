@@ -11,27 +11,34 @@ use std::f32::consts::PI;
 
 use crate::types::SwerveState;
 
-const TURN_POSITION_CONVERSION_FACTOR: f32 = 0.0;
-const TURN_VELOCITY_CONVERSION_FACTOR: f32 = 0.0;
-const DRIVE_POSITION_CONVERSION_FACTOR: f32 = 0.0;
-const DRIVE_VELOCITY_CONVERSION_FACTOR: f32 = 0.0;
+const WHEEL_DIAMETER: f32 = 3.0; // inches
 
-const TURN_P: f32 = 0.0;
+const TURN_POSITION_CONVERSION_FACTOR: f32 = 2.0 * PI;
+// rotations to radians
+const TURN_VELOCITY_CONVERSION_FACTOR: f32 = TURN_POSITION_CONVERSION_FACTOR / 60.0;
+// radians per minute to radians per second
+const DRIVE_POSITION_CONVERSION_FACTOR: f32 = (WHEEL_DIAMETER * PI) / (4.71 * 39.3701);
+// ^ 4.71 is gear reduction, 39.3701 is inches per meter
+const DRIVE_VELOCITY_CONVERSION_FACTOR: f32 = DRIVE_POSITION_CONVERSION_FACTOR / 60.0;
+// meter per minute to meter per second
+
+const TURN_P: f32 = 1.0;
 const TURN_I: f32 = 0.0;
 const TURN_D: f32 = 0.0;
 const TURN_F: f32 = 0.0;
-const DRIVE_P: f32 = 0.0;
+
+const DRIVE_P: f32 = 0.04;
 const DRIVE_I: f32 = 0.0;
 const DRIVE_D: f32 = 0.0;
-const DRIVE_F: f32 = 0.0;
+const DRIVE_F: f32 = 1.0 / 1.530471338; // based on free speed
 
-const TURN_MAX_OUTPUT: f32 = 0.0;
-const TURN_MIN_OUTPUT: f32 = 0.0;
-const DRIVE_MAX_OUTPUT: f32 = 0.0;
-const DRIVE_MIN_OUTPUT: f32 = 0.0;
+const TURN_MAX_OUTPUT: f32 = 1.0;
+const TURN_MIN_OUTPUT: f32 = -1.0;
+const DRIVE_MAX_OUTPUT: f32 = 1.0;
+const DRIVE_MIN_OUTPUT: f32 = -1.0;
 
-const TURN_MAX_CURRENT: u8 = 0;
-const DRIVE_MAX_CURRENT: u8 = 0;
+const TURN_MAX_CURRENT: u8 = 20; // amps
+const DRIVE_MAX_CURRENT: u8 = 50;
 
 const TURN_IDLE_MODE: IdleMode = IdleMode::Brake;
 const DRIVE_IDLE_MODE: IdleMode = IdleMode::Brake;

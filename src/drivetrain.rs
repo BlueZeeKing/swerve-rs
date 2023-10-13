@@ -1,9 +1,6 @@
 use robotrs::{control::ControlSafe, FailableDefault};
 
-use crate::{
-    swerve_module::SwerveModule,
-    types::{SwerveState, Vector},
-};
+use crate::{swerve_module::SwerveModule, types::Vector};
 
 pub struct Drivetrain {
     modules: [SwerveModule; 4],
@@ -24,6 +21,7 @@ impl Drivetrain {
     }
 
     pub fn set_input(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
+        // TODO: Ratelimiting
         self.set_input_raw(drive, turn_rate)
     }
 }
@@ -39,6 +37,7 @@ impl FailableDefault for Drivetrain {
                 SwerveModule::new(7, 8)?,
             ],
             positions: [
+                // FIXME: Make this the right numbers
                 (1.0, 1.0).into(),
                 (1.0, -1.0).into(),
                 (-1.0, 1.0).into(),
