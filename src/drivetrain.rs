@@ -19,22 +19,28 @@ impl Drivetrain {
 
     pub fn current_value(&mut self) -> Vector2<f32> {
         // TODO: Add case for starting from zero
+
+        // deconstruct target and current vectors to get their magnitude and angle
         let (target_angle, target_mag) = deconstruct(self.target);
         let (last_angle, last_mag) = deconstruct(self.last);
 
         let target_angle = target_angle.angle();
         let last_angle = last_angle.angle();
 
+        // if the angle change is greater than 90 degrees, drive backwards
         let (target_angle, target_mag) = if (target_angle - last_angle).abs() > PI / 2.0 {
             (normalize_angle(target_angle + PI), target_mag * -1.0)
         } else {
             (target_angle, target_mag)
         };
 
+        // if we aren't traveling in the correct direction set the target speed to 0
         let target_mag = target_mag * (1.0 - (target_angle - last_angle).abs() / PI).powi(3);
 
-        let angle_limit = (1.0 - (last_mag / 2.0).cbrt()) * ANGLE_LIMIT; // TODO: Maybe square it?
+        // limit the angle rate of change based on the current speed
+        let angle_limit = (1.0 - (last_mag / 2.0).cbrt()) * ANGLE_LIMIT;
 
+        // calculate the next values by stepping the last values to the target values
         let (angle, mag) = (
             if (target_angle - last_angle).abs() < LIMIT {
                 target_angle
