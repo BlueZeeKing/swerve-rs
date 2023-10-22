@@ -1,56 +1,92 @@
-use robotrs::{control::ControlSafe, FailableDefault};
+use std::f32::consts::PI;
 
-use crate::{swerve_module::SwerveModule, types::Vector};
+use rapier2d::na::{Rotation2, Vector2};
+
+use crate::types::normalize_angle;
+
+const LIMIT: f32 = 0.2;
+const ANGLE_LIMIT: f32 = 10.0 * (PI / 180.0);
 
 pub struct Drivetrain {
-    modules: [SwerveModule; 4],
-    positions: [Vector; 4],
-    gyro: navx::NavX,
+    target: Vector2<f32>,
+    last: Vector2<f32>,
 }
 
 impl Drivetrain {
-    fn set_input_raw(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
-        for (module, position) in self.modules.iter_mut().zip(self.positions) {
-            module.set_target(
-                (drive.field_relative(self.gyro.get_yaw()) + position.rotate_90().scale(turn_rate))
-                    .into(),
-            )?;
-        }
-
-        Ok(())
+    pub fn set_input(&mut self, drive: Vector2<f32>) {
+        self.target = drive;
     }
 
-    pub fn set_input(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
-        // TODO: Ratelimiting
-        self.set_input_raw(drive, turn_rate)
+    pub fn current_value(&mut self) -> Vector2<f32> {
+        // TODO: Add case for starting from zero
+        let (target_angle, target_mag) = deconstruct(self.target);
+        let (last_angle, last_mag) = deconstruct(self.last);
+
+        let target_angle = target_angle.angle();
+        let last_angle = last_angle.angle();
+
+        let (target_angle, target_mag) = if (target_angle - last_angle).abs() > PI / 2.0 {
+            (normalize_angle(target_angle + PI), target_mag * -1.0)
+        } else {
+            (target_angle, target_mag)
+        };
+
+        let target_mag = target_mag * (1.0 - (target_angle - last_angle).abs() / PI).powi(3);
+
+        let angle_limit = (1.0 - (last_mag / 2.0).cbrt()) * ANGLE_LIMIT; // TODO: Maybe square it?
+
+        let (angle, mag) = (
+            if (target_angle - last_angle).abs() < LIMIT {
+                target_angle
+            } else if target_angle > last_angle {
+                last_angle + angle_limit
+            } else if target_angle < last_angle {
+                last_angle - angle_limit
+            } else {
+                last_angle
+            },
+            if (target_mag - last_mag).abs() < LIMIT {
+                target_mag
+            } else if target_mag > last_mag {
+                last_mag + LIMIT
+            } else if target_mag < last_mag {
+                last_mag - LIMIT
+            } else {
+                last_mag
+            },
+        );
+
+        self.last = Vector2::new(angle.cos() * mag, angle.sin() * mag);
+
+        self.last
     }
 }
 
-impl FailableDefault for Drivetrain {
-    fn failable_default() -> anyhow::Result<Self> {
-        Ok(Self {
-            gyro: navx::NavX::new(),
-            modules: [
-                SwerveModule::new(1, 2)?,
-                SwerveModule::new(3, 4)?,
-                SwerveModule::new(5, 6)?,
-                SwerveModule::new(7, 8)?,
-            ],
-            positions: [
-                // FIXME: Make this the right numbers
-                (1.0, 1.0).into(),
-                (1.0, -1.0).into(),
-                (-1.0, 1.0).into(),
-                (-1.0, -1.0).into(),
-            ],
-        })
-    }
+fn deconstruct(vector: Vector2<f32>) -> (Rotation2<f32>, f32) {
+    (theta(vector), vector.magnitude())
 }
 
-impl ControlSafe for Drivetrain {
-    fn stop(&mut self) {
-        for module in &mut self.modules {
-            module.stop();
+fn theta(vector: Vector2<f32>) -> Rotation2<f32> {
+    if vector.x == 0.0 {
+        return Rotation2::new(PI / 2.0 * vector.y.signum());
+    }
+
+    let tan_res = (vector.y / vector.x).atan();
+
+    let angle = if vector.x < 0.0 {
+        tan_res + PI
+    } else {
+        tan_res
+    };
+
+    Rotation2::new(normalize_angle(angle))
+}
+
+impl Default for Drivetrain {
+    fn default() -> Self {
+        Self {
+            last: Vector2::zeros(),
+            target: Vector2::zeros(),
         }
     }
 }

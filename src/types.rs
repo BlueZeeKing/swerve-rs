@@ -102,7 +102,7 @@ impl SwerveState {
     }
 }
 
-fn normalize_angle(angle: f32) -> f32 {
+pub fn normalize_angle(angle: f32) -> f32 {
     if angle > 2.0 * PI {
         angle % (2.0 * PI)
     } else if angle < 0.0 {
