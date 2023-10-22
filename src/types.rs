@@ -42,6 +42,27 @@ impl Vector {
 
         (x * cos - y * sin, x * sin - y * cos).into()
     }
+
+    pub fn theta(&self) -> f32 {
+        if self.0 == 0.0 {
+            return PI / 2.0 * self.1.signum();
+        }
+
+        let tan_res = (self.1 / self.0).atan();
+
+        let angle = if self.0 < 0.0 { tan_res + PI } else { tan_res };
+
+        normalize_angle(angle)
+    }
+
+    pub fn magnitude(&self) -> f32 {
+        (self.0.powi(2) + self.1.powi(2)).sqrt()
+    }
+
+    /// Into theta, magnitude
+    pub fn deconstruct(self) -> (f32, f32) {
+        (self.theta(), self.magnitude())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -102,7 +123,7 @@ impl SwerveState {
     }
 }
 
-fn normalize_angle(angle: f32) -> f32 {
+pub fn normalize_angle(angle: f32) -> f32 {
     if angle > 2.0 * PI {
         angle % (2.0 * PI)
     } else if angle < 0.0 {
