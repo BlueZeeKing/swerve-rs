@@ -137,13 +137,19 @@ pub fn optimize_angle(a: f32, b: f32) -> (f32, f32) {
     // FIXME: I think is this is wrong
     let a = normalize_angle(a);
     let b = normalize_angle(b);
-    let diff = a - b;
 
-    if diff.abs() < PI / 2.0 {
+    let b1 = b + 2.0 * PI;
+    let b2 = b - 2.0 * PI;
+
+    let diff = (a - b).abs();
+    let diff1 = (a - b1).abs();
+    let diff2 = (a - b2).abs();
+
+    if diff < diff1 && diff < diff2 {
         (a, b)
-    } else if diff < 0.0 {
-        (a, b - 2.0 * PI)
+    } else if diff1 < diff && diff1 < diff2 {
+        (a, b1)
     } else {
-        (a, b + 2.0 * PI)
+        (a, b2)
     }
 }
