@@ -46,7 +46,9 @@ const DRIVE_IDLE_MODE: IdleMode = IdleMode::Brake;
 pub struct SwerveModule {
     turn: SparkMax,
     drive: SparkMax,
+    #[allow(dead_code)]
     turn_encoder: SparkMaxAbsoluteEncoder,
+    #[allow(dead_code)]
     drive_encoder: SparkMaxRelativeEncoder,
     current_state: SwerveState,
     offset: f32,

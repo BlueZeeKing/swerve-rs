@@ -102,6 +102,10 @@ impl SwerveState {
         self.drive
     }
 
+    pub fn stop(&mut self) {
+        self.drive = 0.0
+    }
+
     pub fn optimize(self, old: SwerveState) -> SwerveState {
         let new_angle = normalize_angle(self.angle);
         let old_angle = normalize_angle(old.angle);

@@ -9,7 +9,7 @@ use robotrs::{
 
 use crate::{
     swerve_module::SwerveModule,
-    types::{optimize_angle, Vector},
+    types::{optimize_angle, SwerveState, Vector},
 };
 
 /// Meters per second
@@ -89,6 +89,17 @@ impl Drivetrain {
         self.last_drive = drive;
 
         self.set_input_raw(drive, turn_rate)
+    }
+
+    pub fn brake(&mut self) -> anyhow::Result<()> {
+        for (module, position) in self.modules.iter_mut().zip(self.positions.iter()) {
+            let mut state: SwerveState = (*position).into();
+            state.stop();
+
+            module.set_target(state)?;
+        }
+
+        Ok(())
     }
 }
 
