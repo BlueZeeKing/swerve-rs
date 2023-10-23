@@ -134,7 +134,6 @@ pub fn normalize_angle(angle: f32) -> f32 {
 }
 
 pub fn optimize_angle(a: f32, b: f32) -> (f32, f32) {
-    // FIXME: I think is this is wrong
     let a = normalize_angle(a);
     let b = normalize_angle(b);
 
