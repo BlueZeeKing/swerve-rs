@@ -49,10 +49,11 @@ pub struct SwerveModule {
     turn_encoder: SparkMaxAbsoluteEncoder,
     drive_encoder: SparkMaxRelativeEncoder,
     current_state: SwerveState,
+    offset: f32,
 }
 
 impl SwerveModule {
-    pub fn new(drive_id: i32, turn_id: i32) -> anyhow::Result<Self> {
+    pub fn new(drive_id: i32, turn_id: i32, angle_offset: f32) -> anyhow::Result<Self> {
         let mut turn = SparkMax::new(turn_id, revlib::MotorType::Brushless);
         let mut drive = SparkMax::new(drive_id, revlib::MotorType::Brushless);
 
@@ -99,6 +100,7 @@ impl SwerveModule {
             turn_encoder,
             drive_encoder,
             current_state: SwerveState::new(starting_turn, 0.0),
+            offset: angle_offset,
         })
     }
 
@@ -106,8 +108,10 @@ impl SwerveModule {
         let state = state.optimize(self.current_state);
         self.current_state = state;
 
-        self.turn
-            .set_refrence(state.get_angle(), revlib::ControlType::Position)?;
+        self.turn.set_refrence(
+            state.get_angle() + self.offset,
+            revlib::ControlType::Position,
+        )?;
         self.drive
             .set_refrence(state.get_drive(), revlib::ControlType::Velocity)?;
 

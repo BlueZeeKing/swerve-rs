@@ -18,6 +18,8 @@ const MAX_VELOCITY_LIMIT: f64 = 4.8;
 const MAX_ROTATION_LIMIT: f64 = 20.0 * (PI / 180.0);
 /// Meters
 const LOW_SPEED_CUTOFF: f32 = 0.01;
+/// Radians
+const ANGLE_OFFSETS: [f32; 4] = [0.0, 0.0, 0.0, 0.0]; // TODO: Make correct
 
 pub struct Drivetrain {
     modules: [SwerveModule; 4],
@@ -100,10 +102,10 @@ impl FailableDefault for Drivetrain {
             gyro: navx::NavX::new(),
 
             modules: [
-                SwerveModule::new(1, 2)?,
-                SwerveModule::new(3, 4)?,
-                SwerveModule::new(5, 6)?,
-                SwerveModule::new(7, 8)?,
+                SwerveModule::new(1, 2, ANGLE_OFFSETS[0])?,
+                SwerveModule::new(3, 4, ANGLE_OFFSETS[1])?,
+                SwerveModule::new(5, 6, ANGLE_OFFSETS[2])?,
+                SwerveModule::new(7, 8, ANGLE_OFFSETS[3])?,
             ],
             positions: [
                 // FIXME: Make this the right numbers
