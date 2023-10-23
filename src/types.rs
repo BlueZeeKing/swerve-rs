@@ -106,8 +106,22 @@ pub fn normalize_angle(angle: f32) -> f32 {
     if angle > 2.0 * PI {
         angle % (2.0 * PI)
     } else if angle < 0.0 {
-        angle % (-2.0 * PI)
+        2.0 * PI - (-angle % (2.0 * PI))
     } else {
         angle
+    }
+}
+
+pub fn optimize_angle(a: f32, b: f32) -> (f32, f32) {
+    let a = normalize_angle(a);
+    let b = normalize_angle(b);
+    let diff = a - b;
+
+    if diff.abs() < PI / 2.0 {
+        (a, b)
+    } else if diff < 0.0 {
+        (a, b - 2.0 * PI)
+    } else {
+        (a, b + 2.0 * PI)
     }
 }

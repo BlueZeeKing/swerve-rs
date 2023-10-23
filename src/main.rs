@@ -54,7 +54,7 @@ fn main() {
         let body = &mut bodies[body_handle];
 
         if t == 100 {
-            drivetrain.set_input(vector![-0.5, -1.0]);
+            drivetrain.set_input(vector![1.0, -1.0]);
         }
 
         body.set_linvel(drivetrain.current_value(), true);
