@@ -76,13 +76,15 @@ impl Drivetrain {
 
         // limit the angle rate of change based on the current speed
         self.angle_limit
-            .set_limit((1.0 - (last_mag / 2.0).cbrt()) as f64 * MAX_ROTATION_LIMIT);
+            .set_limit((1.0 - (last_mag / 4.8).cbrt()) as f64 * MAX_ROTATION_LIMIT);
 
         // calculate the next values by stepping the last values to the target values
         let angle = self.angle_limit.apply(target_angle as f64)?;
         let mag = self.mag_limit.apply(target_mag as f64)?;
 
         let drive = ((angle.cos() * mag) as f32, (angle.sin() * mag) as f32).into();
+
+        self.last_drive = drive;
 
         self.set_input_raw(drive, turn_rate)
     }
