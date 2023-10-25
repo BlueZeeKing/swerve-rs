@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-revlib = { git = "https://github.com/BlueZeeKing/robotrs" }
-robotrs = { git = "https://github.com/BlueZeeKing/robotrs" }
+revlib = { git = "https://github.com/BlueZeeKing/robotrs", branch = "units" }
+units = { git = "https://github.com/BlueZeeKing/robotrs", branch = "units" }
+robotrs = { git = "https://github.com/BlueZeeKing/robotrs", branch = "units" }
 navx = { git = "https://github.com/BlueZeeKing/robotrs", branch = "navx" }
 anyhow = "1.0.75"

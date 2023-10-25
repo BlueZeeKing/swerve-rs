@@ -6,6 +6,12 @@ use robotrs::{
     control::ControlSafe,
     motor::{IdleMode, SetIdleMode},
 };
+use units::{
+    angle::Radian,
+    length::Meter,
+    rate::{MeterPerSecond, RadianPerSecond},
+    Unit,
+};
 
 use std::f32::consts::PI;
 
@@ -47,15 +53,15 @@ pub struct SwerveModule {
     turn: SparkMax,
     drive: SparkMax,
     #[allow(dead_code)]
-    turn_encoder: SparkMaxAbsoluteEncoder,
+    turn_encoder: SparkMaxAbsoluteEncoder<Radian, RadianPerSecond>,
     #[allow(dead_code)]
-    drive_encoder: SparkMaxRelativeEncoder,
+    drive_encoder: SparkMaxRelativeEncoder<Meter, MeterPerSecond>,
     current_state: SwerveState,
-    offset: f32,
+    offset: Radian,
 }
 
 impl SwerveModule {
-    pub fn new(drive_id: i32, turn_id: i32, angle_offset: f32) -> anyhow::Result<Self> {
+    pub fn new(drive_id: i32, turn_id: i32, angle_offset: Radian) -> anyhow::Result<Self> {
         let mut turn = SparkMax::new(turn_id, revlib::MotorType::Brushless);
         let mut drive = SparkMax::new(drive_id, revlib::MotorType::Brushless);
 
@@ -101,7 +107,7 @@ impl SwerveModule {
             drive,
             turn_encoder,
             drive_encoder,
-            current_state: SwerveState::new(starting_turn, 0.0),
+            current_state: SwerveState::new(starting_turn, MeterPerSecond::new(0.0)),
             offset: angle_offset,
         })
     }
@@ -111,11 +117,11 @@ impl SwerveModule {
         self.current_state = state;
 
         self.turn.set_refrence(
-            state.get_angle() + self.offset,
+            (state.get_angle() + self.offset).raw(),
             revlib::ControlType::Position,
         )?;
         self.drive
-            .set_refrence(state.get_drive(), revlib::ControlType::Velocity)?;
+            .set_refrence(state.get_drive().raw(), revlib::ControlType::Velocity)?;
 
         Ok(())
     }
