@@ -3,8 +3,8 @@
 use anyhow::bail;
 use drivetrain::Drivetrain;
 use robotrs::{
-    control::ControlLock, hid::controller::XboxController, robot::AsyncRobot, scheduler::Spawner,
-    yield_now, FailableDefault,
+    control::ControlLock, hid::controller::XboxController, robot::AsyncRobot, yield_now,
+    FailableDefault,
 };
 
 pub mod drivetrain;
@@ -17,15 +17,15 @@ pub struct Robot {
 }
 
 impl AsyncRobot for Robot {
-    async fn get_auto_future(self: std::rc::Rc<Self>) -> anyhow::Result<()> {
+    async fn get_auto_future(&self) -> anyhow::Result<()> {
         bail!("Not created");
     }
 
-    async fn get_enabled_future(self: std::rc::Rc<Self>) -> anyhow::Result<()> {
-        Ok(())
+    async fn get_enabled_future(&self) -> anyhow::Result<()> {
+        self.brake().await
     }
 
-    async fn get_teleop_future(self: std::rc::Rc<Self>) -> anyhow::Result<()> {
+    async fn get_teleop_future(&self) -> anyhow::Result<()> {
         loop {
             let mut drivetrain = self.drivetrain.lock().await;
 
@@ -33,25 +33,25 @@ impl AsyncRobot for Robot {
                 (self.controller.left_x()?, self.controller.left_y()?).into(),
                 self.controller.right_x()?,
             )?;
-                
+
             yield_now();
         }
     }
+}
 
-    fn create_bindings(self: std::rc::Rc<Self>, executor: &Spawner) {
-        executor.spawn(async move {
-            loop {
-                let released = self.controller.x().await?;
+impl Robot {
+    pub async fn brake(&self) -> anyhow::Result<()> {
+        loop {
+            let released = self.controller.x().await?;
 
-                let mut drivetrain = self.drivetrain.lock().await;
+            let mut drivetrain = self.drivetrain.lock().await;
 
-                drivetrain.brake()?;
+            drivetrain.brake()?;
 
-                released.await?;
+            released.await?;
 
-                drop(drivetrain)
-            }
-        })
+            drop(drivetrain)
+        }
     }
 }
 
