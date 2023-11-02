@@ -34,6 +34,8 @@ impl AsyncRobot for Robot {
                 self.controller.right_x()?,
             )?;
 
+            drop(drivetrain);
+
             yield_now();
         }
     }
