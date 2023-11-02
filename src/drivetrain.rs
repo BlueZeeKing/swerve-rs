@@ -25,8 +25,6 @@ pub struct Drivetrain {
     modules: [SwerveModule; 4],
     positions: [Vector; 4],
 
-    gyro: navx::NavX,
-
     angle_limit: SlewRateLimiter,
     mag_limit: SlewRateLimiter,
     last_drive: Vector,
@@ -35,10 +33,7 @@ pub struct Drivetrain {
 impl Drivetrain {
     fn set_input_raw(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
         for (module, position) in self.modules.iter_mut().zip(self.positions) {
-            module.set_target(
-                (drive.field_relative(self.gyro.get_yaw()) + position.rotate_90().scale(turn_rate))
-                    .into(),
-            )?;
+            module.set_target((drive + position.rotate_90().scale(turn_rate)).into())?;
         }
 
         Ok(())
@@ -109,8 +104,6 @@ impl FailableDefault for Drivetrain {
             last_drive: (0.0, 0.0).into(),
             angle_limit: SlewRateLimiter::new(MAX_ROTATION_LIMIT)?,
             mag_limit: SlewRateLimiter::new(MAX_VELOCITY_LIMIT)?,
-
-            gyro: navx::NavX::new(),
 
             modules: [
                 SwerveModule::new(1, 2, ANGLE_OFFSETS[0])?,

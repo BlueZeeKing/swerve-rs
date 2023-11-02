@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 revlib = { git = "https://github.com/BlueZeeKing/robotrs" }
 robotrs = { git = "https://github.com/BlueZeeKing/robotrs" }
-navx = { git = "https://github.com/BlueZeeKing/robotrs", branch = "navx" }
 anyhow = "1.0.75"
