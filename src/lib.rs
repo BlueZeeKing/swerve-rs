@@ -1,11 +1,13 @@
-#![feature(async_fn_in_trait, return_position_impl_trait_in_trait)]
+use std::future::pending;
 
 use anyhow::bail;
 use drivetrain::Drivetrain;
+use nalgebra::Vector2;
 use robotrs::{
-    control::ControlLock, hid::controller::XboxController, robot::AsyncRobot, yield_now,
+    control::ControlLock, hid::controller::XboxController, robot::AsyncRobot, yield_now, Deadzone,
     FailableDefault,
 };
+use utils::trigger::TriggerExt;
 
 pub mod drivetrain;
 pub mod swerve_module;
@@ -18,42 +20,43 @@ pub struct Robot {
 
 impl AsyncRobot for Robot {
     async fn get_auto_future(&self) -> anyhow::Result<()> {
-        bail!("Not created");
+        Ok(())
     }
 
     async fn get_enabled_future(&self) -> anyhow::Result<()> {
-        self.brake().await
+        Ok(())
     }
 
     async fn get_teleop_future(&self) -> anyhow::Result<()> {
+        let mut drivetrain = self.drivetrain.lock().await;
         loop {
-            let mut drivetrain = self.drivetrain.lock().await;
-
             drivetrain.set_input(
-                (self.controller.left_x()?, self.controller.left_y()?).into(),
-                self.controller.right_x()?,
+                Vector2::new(
+                    -self.controller.left_y()?.deadzone(0.1),
+                    -self.controller.left_x()?.deadzone(0.1),
+                ),
+                -self.controller.right_x()?.deadzone(0.1),
             )?;
 
-            drop(drivetrain);
-
-            yield_now();
+            yield_now().await;
         }
     }
-}
 
-impl Robot {
-    pub async fn brake(&self) -> anyhow::Result<()> {
-        loop {
-            let released = self.controller.x().await?;
-
+    fn configure_bindings<'a>(
+        &'a self,
+        scheduler: &'a robotrs::scheduler::RobotScheduler<'a, Self>,
+    ) -> anyhow::Result<()> {
+        self.controller.x().while_pressed(scheduler, || async {
             let mut drivetrain = self.drivetrain.lock().await;
 
             drivetrain.brake()?;
 
-            released.await?;
+            pending::<()>().await;
 
-            drop(drivetrain)
-        }
+            anyhow::Ok(())
+        });
+
+        Ok(())
     }
 }
 

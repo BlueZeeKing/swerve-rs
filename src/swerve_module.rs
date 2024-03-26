@@ -1,3 +1,4 @@
+use nalgebra::Rotation2;
 use revlib::{
     encoder::{absolute::SparkMaxAbsoluteEncoder, relative::SparkMaxRelativeEncoder, Encoder},
     SparkMax,
@@ -9,7 +10,7 @@ use robotrs::{
 
 use std::f32::consts::PI;
 
-use crate::types::SwerveState;
+use crate::types::{normalize_angle, SwerveState};
 
 const WHEEL_DIAMETER: f32 = 3.0; // inches
 
@@ -55,7 +56,7 @@ pub struct SwerveModule {
 }
 
 impl SwerveModule {
-    pub fn new(drive_id: i32, turn_id: i32, angle_offset: f32) -> anyhow::Result<Self> {
+    pub fn new(drive_id: i32, turn_id: i32, angle_offset: Rotation2<f32>) -> anyhow::Result<Self> {
         let mut turn = SparkMax::new(turn_id, revlib::MotorType::Brushless);
         let mut drive = SparkMax::new(drive_id, revlib::MotorType::Brushless);
 
@@ -77,6 +78,9 @@ impl SwerveModule {
 
         turn.set_pid(TURN_P, TURN_D, TURN_I, TURN_F)?;
         drive.set_pid(DRIVE_P, DRIVE_D, DRIVE_I, DRIVE_F)?;
+
+        turn.set_pid_range(-1.0..=1.0)?;
+        drive.set_pid_range(-1.0..=1.0)?;
 
         turn.set_wrapping(true, 0.0, 2.0 * PI)?;
 
@@ -102,20 +106,21 @@ impl SwerveModule {
             turn_encoder,
             drive_encoder,
             current_state: SwerveState::new(starting_turn, 0.0),
-            offset: angle_offset,
+            offset: normalize_angle(angle_offset.angle()),
         })
     }
 
     pub fn set_target(&mut self, state: SwerveState) -> anyhow::Result<()> {
+        // dbg!(state);
         let state = state.optimize(self.current_state);
         self.current_state = state;
 
-        self.turn.set_refrence(
+        self.turn.set_reference(
             state.get_angle() + self.offset,
             revlib::ControlType::Position,
         )?;
         self.drive
-            .set_refrence(state.get_drive(), revlib::ControlType::Velocity)?;
+            .set_reference(state.get_drive(), revlib::ControlType::Velocity)?;
 
         Ok(())
     }

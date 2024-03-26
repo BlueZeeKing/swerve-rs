@@ -1,88 +1,25 @@
-use std::{f32::consts::PI, ops::Add};
+use std::f32::consts::PI;
 
-#[derive(Clone, Copy)]
-pub struct Vector(f32, f32);
+use nalgebra::Vector2;
 
-impl Add for Vector {
-    type Output = Vector;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Vector(self.0 + rhs.0, self.1 + rhs.1)
-    }
-}
-
-impl From<(f32, f32)> for Vector {
-    fn from(value: (f32, f32)) -> Self {
-        Self(value.0, value.1)
-    }
-}
-
-impl From<Vector> for (f32, f32) {
-    fn from(value: Vector) -> Self {
-        (value.0, value.1)
-    }
-}
-
-impl Vector {
-    pub fn rotate_90(self) -> Self {
-        Self(self.1 * -1.0, self.0)
-    }
-
-    pub fn scale(self, scalar: f32) -> Self {
-        Self(self.0 * scalar, self.1 * scalar)
-    }
-
-    // multiply the vector by the matrix:
-    //
-    // cos theta, -sin theta
-    // sin theta, cos theta
-    pub fn field_relative(self, orientation: f32) -> Self {
-        let (x, y) = Vector::from(self).into();
-        let (sin, cos) = (-1.0 * orientation).sin_cos();
-
-        (x * cos - y * sin, x * sin - y * cos).into()
-    }
-
-    pub fn theta(&self) -> f32 {
-        if self.0 == 0.0 {
-            return PI / 2.0 * self.1.signum();
-        }
-
-        let tan_res = (self.1 / self.0).atan();
-
-        let angle = if self.0 < 0.0 { tan_res + PI } else { tan_res };
-
-        normalize_angle(angle)
-    }
-
-    pub fn magnitude(&self) -> f32 {
-        (self.0.powi(2) + self.1.powi(2)).sqrt()
-    }
-
-    /// Into theta, magnitude
-    pub fn deconstruct(self) -> (f32, f32) {
-        (self.theta(), self.magnitude())
-    }
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SwerveState {
-    angle: f32,
-    drive: f32,
+    pub angle: f32,
+    pub drive: f32,
 }
 
-impl From<Vector> for SwerveState {
-    fn from(value: Vector) -> Self {
+impl From<Vector2<f32>> for SwerveState {
+    fn from(value: Vector2<f32>) -> Self {
         Self {
-            drive: (value.0.powi(2) + value.1.powi(2)).sqrt(),
-            angle: normalize_angle((value.1 / value.0).atan()),
+            drive: (value.x.powi(2) + value.y.powi(2)).sqrt(),
+            angle: normalize_angle(value.y.atan2(value.x)),
         }
     }
 }
 
-impl From<SwerveState> for Vector {
+impl From<SwerveState> for Vector2<f32> {
     fn from(value: SwerveState) -> Self {
-        Self(
+        Vector2::new(
             value.angle.cos() * value.drive,
             value.angle.sin() * value.drive,
         )
@@ -113,14 +50,9 @@ impl SwerveState {
 
         if diff.abs() < PI / 2.0 {
             self
-        } else if diff < 0.0 {
-            Self {
-                angle: new_angle + 2.0 * PI,
-                drive: -1.0 * self.drive,
-            }
         } else {
             Self {
-                angle: new_angle - 2.0 * PI,
+                angle: normalize_angle(new_angle - PI),
                 drive: -1.0 * self.drive,
             }
         }

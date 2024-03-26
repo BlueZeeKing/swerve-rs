@@ -1,87 +1,50 @@
-use std::f32::consts::PI as f32PI;
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
+use nalgebra::{Rotation2, Vector2};
 use robotrs::{
     control::ControlSafe,
     math::filter::{Filter, SlewRateLimiter},
     FailableDefault,
 };
 
-use crate::{
-    swerve_module::SwerveModule,
-    types::{optimize_angle, SwerveState, Vector},
-};
+use crate::{swerve_module::SwerveModule, types::SwerveState};
 
 /// Meters per second
-const MAX_VELOCITY_LIMIT: f64 = 4.8;
+const MAX_VELOCITY_LIMIT: f32 = 4.8;
 /// Radians per second
-const MAX_ROTATION_LIMIT: f64 = 20.0 * (PI / 180.0);
+const MAX_ROTATION_LIMIT: f32 = 20.0 * (PI / 180.0);
 /// Meters
 const LOW_SPEED_CUTOFF: f32 = 0.01;
-/// Radians
-const ANGLE_OFFSETS: [f32; 4] = [0.0, 0.0, 0.0, 0.0]; // TODO: Make correct
+
+const MAX_ACCEL: f32 = 5.0;
+const MAX_ANGLE_ACCEL: f32 = 5.0;
+
+const TRACK_WIDTH: f32 = 0.7239;
+const WHEEL_BASE: f32 = 0.6096;
 
 pub struct Drivetrain {
     modules: [SwerveModule; 4],
-    positions: [Vector; 4],
+    positions: [Vector2<f32>; 4],
 
+    x_limit: SlewRateLimiter,
+    y_limit: SlewRateLimiter,
     angle_limit: SlewRateLimiter,
-    mag_limit: SlewRateLimiter,
-    last_drive: Vector,
 }
 
 impl Drivetrain {
-    fn set_input_raw(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
+    pub fn set_input_raw(&mut self, drive: Vector2<f32>, turn_rate: f32) -> anyhow::Result<()> {
         for (module, position) in self.modules.iter_mut().zip(self.positions) {
-            module.set_target((drive + position.rotate_90().scale(turn_rate)).into())?;
+            module.set_target(
+                (drive + Rotation2::new(90.0_f32.to_radians()) * position.scale(turn_rate)).into(),
+            )?;
         }
 
         Ok(())
     }
 
-    pub fn set_input(&mut self, drive: Vector, turn_rate: f32) -> anyhow::Result<()> {
-        // deconstruct target and current vectors to get their magnitude and angle
-        let (target_angle, target_mag) = drive.deconstruct();
-        let (last_angle, last_mag) = self.last_drive.deconstruct();
-
-        // Correct angles when moving very slowly
-        let last_angle = if last_mag < LOW_SPEED_CUTOFF {
-            target_angle
-        } else {
-            last_angle
-        };
-
-        let target_angle = if target_mag < LOW_SPEED_CUTOFF {
-            last_angle
-        } else {
-            target_angle
-        };
-
-        let (target_angle, last_angle) = optimize_angle(target_angle, last_angle);
-
-        // if the angle change is greater than 90 degrees, drive backwards
-        let (target_angle, target_mag) = if (target_angle - last_angle).abs() > f32PI / 2.0 {
-            (target_angle + f32PI, target_mag * -1.0)
-        } else {
-            (target_angle, target_mag)
-        };
-
-        let (target_angle, last_angle) = optimize_angle(target_angle, last_angle);
-
-        // if we aren't traveling in the correct direction set the target speed to 0
-        let target_mag = target_mag * (1.0 - (target_angle - last_angle).abs() / f32PI).powi(3);
-
-        // limit the angle rate of change based on the current speed
-        self.angle_limit
-            .set_limit((1.0 - (last_mag / 4.8).cbrt()) as f64 * MAX_ROTATION_LIMIT);
-
-        // calculate the next values by stepping the last values to the target values
-        let angle = self.angle_limit.apply(target_angle as f64)?;
-        let mag = self.mag_limit.apply(target_mag as f64)?;
-
-        let drive = ((angle.cos() * mag) as f32, (angle.sin() * mag) as f32).into();
-
-        self.last_drive = drive;
+    pub fn set_input(&mut self, drive: Vector2<f32>, turn_rate: f32) -> anyhow::Result<()> {
+        let drive = Vector2::new(self.x_limit.apply(drive.x)?, self.y_limit.apply(drive.y)?);
+        let turn_rate = self.angle_limit.apply(turn_rate)?;
 
         self.set_input_raw(drive, turn_rate)
     }
@@ -101,22 +64,21 @@ impl Drivetrain {
 impl FailableDefault for Drivetrain {
     fn failable_default() -> anyhow::Result<Self> {
         Ok(Self {
-            last_drive: (0.0, 0.0).into(),
-            angle_limit: SlewRateLimiter::new(MAX_ROTATION_LIMIT)?,
-            mag_limit: SlewRateLimiter::new(MAX_VELOCITY_LIMIT)?,
+            angle_limit: SlewRateLimiter::new(MAX_ANGLE_ACCEL)?,
+            x_limit: SlewRateLimiter::new(MAX_ACCEL)?,
+            y_limit: SlewRateLimiter::new(MAX_ACCEL)?,
 
             modules: [
-                SwerveModule::new(1, 2, ANGLE_OFFSETS[0])?,
-                SwerveModule::new(3, 4, ANGLE_OFFSETS[1])?,
-                SwerveModule::new(5, 6, ANGLE_OFFSETS[2])?,
-                SwerveModule::new(7, 8, ANGLE_OFFSETS[3])?,
+                SwerveModule::new(1, 2, Rotation2::new(0.0))?, // front right
+                SwerveModule::new(3, 4, Rotation2::new(-PI / 2.0))?, // front left
+                SwerveModule::new(5, 6, Rotation2::new(PI))?,  // rear left
+                SwerveModule::new(7, 8, Rotation2::new(PI / 2.0))?, // rear right
             ],
             positions: [
-                // FIXME: Make this the right numbers
-                (1.0, 1.0).into(),
-                (1.0, -1.0).into(),
-                (-1.0, 1.0).into(),
-                (-1.0, -1.0).into(),
+                Vector2::new(WHEEL_BASE / 2.0, -TRACK_WIDTH / 2.0),
+                Vector2::new(WHEEL_BASE / 2.0, TRACK_WIDTH / 2.0),
+                Vector2::new(-WHEEL_BASE / 2.0, TRACK_WIDTH / 2.0),
+                Vector2::new(-WHEEL_BASE / 2.0, -TRACK_WIDTH / 2.0),
             ],
         })
     }
