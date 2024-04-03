@@ -1,16 +1,12 @@
 use nalgebra::Rotation2;
-use revlib::{
-    encoder::{absolute::SparkMaxAbsoluteEncoder, relative::SparkMaxRelativeEncoder, Encoder},
-    SparkMax,
-};
+use revlib::{encoder::Encoder, SparkMax};
 use robotrs::{
     control::ControlSafe,
     motor::{IdleMode, SetIdleMode},
 };
 
+use math::{kinematics::SwerveState, normalize_angle};
 use std::f32::consts::PI;
-
-use crate::types::{normalize_angle, SwerveState};
 
 const WHEEL_DIAMETER: f32 = 3.0; // inches
 
@@ -47,18 +43,18 @@ const DRIVE_IDLE_MODE: IdleMode = IdleMode::Brake;
 pub struct SwerveModule {
     turn: SparkMax,
     drive: SparkMax,
-    #[allow(dead_code)]
-    turn_encoder: SparkMaxAbsoluteEncoder,
-    #[allow(dead_code)]
-    drive_encoder: SparkMaxRelativeEncoder,
     current_state: SwerveState,
     offset: f32,
 }
 
 impl SwerveModule {
-    pub fn new(drive_id: i32, turn_id: i32, angle_offset: Rotation2<f32>) -> anyhow::Result<Self> {
-        let mut turn = SparkMax::new(turn_id, revlib::MotorType::Brushless);
-        let mut drive = SparkMax::new(drive_id, revlib::MotorType::Brushless);
+    pub fn new(
+        drive_id: i32,
+        turn_id: i32,
+        angle_offset: Rotation2<f32>,
+    ) -> anyhow::Result<(Self, impl FnMut() -> anyhow::Result<SwerveState> + 'static)> {
+        let mut turn = SparkMax::new(turn_id, revlib::MotorType::Brushless)?;
+        let mut drive = SparkMax::new(drive_id, revlib::MotorType::Brushless)?;
 
         turn.reset_settings()?;
         drive.reset_settings()?;
@@ -100,14 +96,30 @@ impl SwerveModule {
 
         drive_encoder.set_position(0.0)?;
 
-        Ok(Self {
-            turn,
-            drive,
-            turn_encoder,
-            drive_encoder,
-            current_state: SwerveState::new(starting_turn, 0.0),
-            offset: normalize_angle(angle_offset.angle()),
-        })
+        let offset = normalize_angle(angle_offset.angle());
+
+        let mut last_position = 0.0;
+
+        Ok((
+            Self {
+                turn,
+                drive,
+                current_state: SwerveState::new(starting_turn, 0.0),
+                offset,
+            },
+            move || {
+                let new_position = drive_encoder.get_position()?;
+
+                let res = Ok(SwerveState {
+                    drive: new_position - last_position,
+                    angle: turn_encoder.get_position()? - offset,
+                });
+
+                last_position = new_position;
+
+                res
+            },
+        ))
     }
 
     pub fn set_target(&mut self, state: SwerveState) -> anyhow::Result<()> {

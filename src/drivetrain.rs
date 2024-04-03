@@ -1,20 +1,26 @@
 use std::f32::consts::PI;
 
-use nalgebra::{Rotation2, Vector2};
+use math::{
+    kinematics::{module_positions_from_dimensions, Kinematics, SwerveKinematics},
+    normalize_angle,
+    odometry::Odometry,
+};
+use nalgebra::{Rotation2, Vector2, Vector3};
+use navx::NavX;
 use robotrs::{
     control::ControlSafe,
     math::filter::{Filter, SlewRateLimiter},
-    FailableDefault,
+    scheduler::spawn,
+    yield_now, FailableDefault,
 };
+use utils::error::log;
 
-use crate::{swerve_module::SwerveModule, types::SwerveState};
+use crate::swerve_module::SwerveModule;
 
 /// Meters per second
-const MAX_VELOCITY_LIMIT: f32 = 4.8;
+const MAX_VELOCITY_LIMIT: f32 = 1.0;
 /// Radians per second
-const MAX_ROTATION_LIMIT: f32 = 20.0 * (PI / 180.0);
-/// Meters
-const LOW_SPEED_CUTOFF: f32 = 0.01;
+const MAX_ROTATION_LIMIT: f32 = 1.0;
 
 const MAX_ACCEL: f32 = 5.0;
 const MAX_ANGLE_ACCEL: f32 = 5.0;
@@ -24,7 +30,10 @@ const WHEEL_BASE: f32 = 0.6096;
 
 pub struct Drivetrain {
     modules: [SwerveModule; 4],
-    positions: [Vector2<f32>; 4],
+
+    kinematics: SwerveKinematics,
+    odometry: Odometry<SwerveKinematics>,
+    gyro: NavX,
 
     x_limit: SlewRateLimiter,
     y_limit: SlewRateLimiter,
@@ -32,28 +41,42 @@ pub struct Drivetrain {
 }
 
 impl Drivetrain {
+    pub fn get_pose(&self) -> Vector3<f32> {
+        self.odometry.get_pose()
+    }
+
     pub fn set_input_raw(&mut self, drive: Vector2<f32>, turn_rate: f32) -> anyhow::Result<()> {
-        for (module, position) in self.modules.iter_mut().zip(self.positions) {
-            module.set_target(
-                (drive + Rotation2::new(90.0_f32.to_radians()) * position.scale(turn_rate)).into(),
-            )?;
+        let drive = Rotation2::new(-self.get_heading()).matrix() * drive;
+
+        for (module, state) in self.modules.iter_mut().zip(
+            self.kinematics
+                .inverse(drive.fixed_resize(turn_rate))
+                .into_iter(),
+        ) {
+            module.set_target(state)?;
         }
 
         Ok(())
     }
 
+    pub fn get_heading(&self) -> f32 {
+        normalize_angle(-self.gyro.heading().to_radians())
+    }
+
     pub fn set_input(&mut self, drive: Vector2<f32>, turn_rate: f32) -> anyhow::Result<()> {
-        let drive = Vector2::new(self.x_limit.apply(drive.x)?, self.y_limit.apply(drive.y)?);
-        let turn_rate = self.angle_limit.apply(turn_rate)?;
+        let drive = Vector2::new(self.x_limit.apply(drive.x)?, self.y_limit.apply(drive.y)?)
+            .scale(MAX_VELOCITY_LIMIT);
+        let turn_rate = self.angle_limit.apply(turn_rate)? * MAX_ROTATION_LIMIT;
 
         self.set_input_raw(drive, turn_rate)
     }
 
     pub fn brake(&mut self) -> anyhow::Result<()> {
-        for (module, position) in self.modules.iter_mut().zip(self.positions.iter()) {
-            let mut state: SwerveState = (*position).into();
-            state.stop();
-
+        for (module, state) in self
+            .modules
+            .iter_mut()
+            .zip(self.kinematics.brake().into_iter())
+        {
             module.set_target(state)?;
         }
 
@@ -63,23 +86,53 @@ impl Drivetrain {
 
 impl FailableDefault for Drivetrain {
     fn failable_default() -> anyhow::Result<Self> {
+        let kinematics =
+            SwerveKinematics::new(module_positions_from_dimensions(TRACK_WIDTH, WHEEL_BASE));
+
+        let (front_left, mut front_left_state) =
+            SwerveModule::new(3, 4, Rotation2::new(-PI / 2.0))?;
+        let (front_right, mut front_right_state) = SwerveModule::new(1, 2, Rotation2::new(0.0))?;
+        let (rear_left, mut rear_left_state) = SwerveModule::new(5, 6, Rotation2::new(PI))?;
+        let (rear_right, mut rear_right_state) = SwerveModule::new(7, 8, Rotation2::new(PI / 2.0))?;
+
+        let odometry = Odometry::new(kinematics.clone(), Vector3::new(0.0, 0.0, 0.0));
+        let odometry2 = odometry.clone();
+
+        let gyro = NavX::new(hal::spi::RioSPI::new(hal::spi::Port::MXP)?, 60);
+        let gyro2 = gyro.clone();
+
+        spawn(async move {
+            loop {
+                let _ = log(async {
+                    odometry2.update(
+                        [
+                            front_left_state()?,
+                            front_right_state()?,
+                            rear_left_state()?,
+                            rear_right_state()?,
+                        ],
+                        -gyro2.heading().to_radians(),
+                    );
+
+                    anyhow::Ok(())
+                })
+                .await;
+
+                yield_now().await;
+            }
+        })
+        .detach();
+
         Ok(Self {
             angle_limit: SlewRateLimiter::new(MAX_ANGLE_ACCEL)?,
             x_limit: SlewRateLimiter::new(MAX_ACCEL)?,
             y_limit: SlewRateLimiter::new(MAX_ACCEL)?,
 
-            modules: [
-                SwerveModule::new(1, 2, Rotation2::new(0.0))?, // front right
-                SwerveModule::new(3, 4, Rotation2::new(-PI / 2.0))?, // front left
-                SwerveModule::new(5, 6, Rotation2::new(PI))?,  // rear left
-                SwerveModule::new(7, 8, Rotation2::new(PI / 2.0))?, // rear right
-            ],
-            positions: [
-                Vector2::new(WHEEL_BASE / 2.0, -TRACK_WIDTH / 2.0),
-                Vector2::new(WHEEL_BASE / 2.0, TRACK_WIDTH / 2.0),
-                Vector2::new(-WHEEL_BASE / 2.0, TRACK_WIDTH / 2.0),
-                Vector2::new(-WHEEL_BASE / 2.0, -TRACK_WIDTH / 2.0),
-            ],
+            odometry,
+            kinematics,
+            gyro,
+
+            modules: [front_left, front_right, rear_left, rear_right],
         })
     }
 }
